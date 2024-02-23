@@ -13,8 +13,8 @@ class EmailExtractor():
         return search_criteria
     
     def attachment_download(self,SUBJECT):
-        username = 'siamahmed222945@gmail.com'
-        password = 'jgdw kdtk gmbi ievx'
+        username = ''
+        password = ''
         url = 'imap.gmail.com'
         detach_dir = '.'#where to save attachments (default:current directory)
         #connecting to server
