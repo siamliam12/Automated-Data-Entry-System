@@ -19,7 +19,6 @@ class EmailExtractor():
         if start_date and end_date:
             search_criteria += ' (Since {} Before {})'.format(start_date, end_date)
         return search_criteria
-    
     def search_by_sender(self,sender):
         search_criteria = "From '{}'".format(sender)
         return search_criteria
@@ -94,6 +93,7 @@ class EmailExtractor():
                     ''', )  
         
 emailExtractor = EmailExtractor()
+
 subject ='Testing'
 start_date = "01-Feb-2024"
 end_date = "28-Feb-2024"
@@ -102,3 +102,7 @@ sender = ""
 search_criteria = emailExtractor.search_by_sender(sender)
 print(search_criteria)
 emailExtractor.attachment_download(search_criteria)
+
+subject ='SUBJECT "Testing"'
+emailExtractor.attachment_download(subject)
+
