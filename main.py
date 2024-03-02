@@ -6,7 +6,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup as bs
 
-load_dotenv()
+load_dotenv('./.env')
 class EmailExtractor():    
     cwd = os.getcwd()
 
@@ -14,17 +14,18 @@ class EmailExtractor():
     #     #email search criteria
     #     search_criteria = "(ON "+date+" Subject '"+subject_header+"')"
     #     return search_criteria
-    def details(self,subject_header,start_date=None,end_date=None):
+    def set_search_rules(self,subject_header,start_date=None,end_date=None):
         search_criteria = "Subject '{}'".format(subject_header)
         if start_date and end_date:
             search_criteria += ' (Since {} Before {})'.format(start_date, end_date)
         return search_criteria
+    
     def search_by_sender(self,sender):
         search_criteria = "From '{}'".format(sender)
         return search_criteria
     
     def attachment_download(self,search_criteria):
-        username = os.environ.get('username')
+        username = os.environ.get('email')
         password = os.environ.get('password')
         url = 'imap.gmail.com'
         detach_dir = './downloads'#where to save attachments (default:current directory)
@@ -94,15 +95,12 @@ class EmailExtractor():
         
 emailExtractor = EmailExtractor()
 
-subject ='Testing'
+subject ='prescription'
 start_date = "01-Feb-2024"
-end_date = "28-Feb-2024"
+end_date = "28-Mar-2024"
 sender = ""
-# search_criteria = emailExtractor.details(subject,start_date,end_date)
-search_criteria = emailExtractor.search_by_sender(sender)
+search_criteria = emailExtractor.set_search_rules(subject,start_date,end_date)
+# search_criteria = emailExtractor.search_by_sender(sender)
 print(search_criteria)
 emailExtractor.attachment_download(search_criteria)
-
-subject ='SUBJECT "Testing"'
-emailExtractor.attachment_download(subject)
 
