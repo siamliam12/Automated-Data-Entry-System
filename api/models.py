@@ -17,3 +17,5 @@ class TokenTable(Base):
     refresh_token = Column(String(450),nullable=False)
     status = Column(Boolean)
     created_at = Column(DateTime,default=datetime.datetime.now)
+    email = Column(String,index=True)
+    download_dir = Column(String,index=True)

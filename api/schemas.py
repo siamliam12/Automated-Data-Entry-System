@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 import datetime
-
+from typing import Optional
 class UserCreationModel(BaseModel):
     Username : str
     email : str
@@ -15,6 +15,7 @@ class TokenSchema(BaseModel):
     access_token : str
     refresh_token: str
 
+    
 class ChangePassword(BaseModel):
     email : str
     old_password : str
@@ -28,9 +29,10 @@ class TokenCreate(BaseModel):
     created_at : datetime.datetime
 
 class TokenData(BaseModel):
-    username: str | None = None
-    email: str | None = None
-    download_dir: str | None = None
+    Username: str 
+    email: str
+    download_dir: str
 
 class UserInDB(UserCreationModel):
     hashed_password: str
+

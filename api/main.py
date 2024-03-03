@@ -70,7 +70,7 @@ def login(request:schemas.requestdetails,db:Session=Depends(get_session)):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Invalid Credentials")
     access = create_access_token(user.id)
     refresh = create_refresh_token(user.id)
-    token_db = models.TokenTable(user_id=user.id,access_token=access,refresh_token=refresh, status=True)
+    token_db = models.TokenTable(user_id=user.id,email=user.email,download_dir=user.download_dir,access_token=access,refresh_token=refresh, status=True)
     db.add(token_db)
     db.commit()
     db.refresh(token_db)
@@ -101,10 +101,10 @@ def logout(dependencies=Depends(JWTBearer()), db: Session = Depends(get_session)
         db.refresh(existing_token)
     return {"message":"Logout Successfully"} 
 
-@app.get('/getusers')
-def getusers( dependencies=Depends(JWTBearer()),session: Session = Depends(get_session)):
-    user = session.query(models.User).all()
-    return user
+# @app.get('/getusers')
+# def getusers( dependencies=Depends(JWTBearer()),session: Session = Depends(get_session)):
+#     user = session.query(models.User).all()
+#     return user
 
 @app.post('/change-password')
 def change_password(request: schemas.ChangePassword, db: Session = Depends(get_session)):
@@ -140,36 +140,38 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)],db: Ses
     )
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        Username: str = payload.get("sub")
+        email: str = payload.get("email","")
+        download_dir: str = payload.get("download_dir","")
+        if Username is None:
             raise credentials_exception
-        token_data = schemas.TokenData(username=username)
+        token_data = schemas.TokenData(Username=Username,email=email, download_dir=download_dir)
     except JWTError:
         raise credentials_exception
-    user = get_user(db, username=token_data.username)
+    user = get_user(db, username=token_data.Username)
     if user is None:
         raise credentials_exception
     return user
 
 async def get_current_active_user(
-    current_user: Annotated[User, Depends(get_current_user)]
-):
+    current_user: User=Depends(get_current_user)
+)->User:
     if current_user.disabled:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
-@app.post('/token',response_model=schemas.TokenSchema,)
-async def login_for_acess_token(form_data: OAuth2PasswordRequestForm = Depends(),db: Session = Depends(get_session)):
-    user = authenticate_user(db,form_data.usermane,form_data.password)
-    if not user:
-        raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Incorrect username or password",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(data={"sub":user.username},expires_delta=access_token_expires)
-    return {"access_token":access_token,"token_type":"bearer"}
+# @app.post('/token',response_model=schemas.TokenSchema,)
+# async def login_for_acess_token(form_data: OAuth2PasswordRequestForm = Depends(),db: Session = Depends(get_session)):
+#     user = authenticate_user(db,form_data.usermane,form_data.password)
+#     if not user:
+#         raise HTTPException(
+#         status_code=status.HTTP_401_UNAUTHORIZED,
+#         detail="Incorrect username or password",
+#         headers={"WWW-Authenticate": "Bearer"},
+#     )
+#     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+#     access_token = create_access_token(data={"sub":user.username},expires_delta=access_token_expires)
+#     return {"access_token":access_token,"token_type":"bearer"}
 
 @app.get('/get-data')
 async def get_data():

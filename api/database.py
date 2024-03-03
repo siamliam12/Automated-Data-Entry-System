@@ -7,7 +7,7 @@ import os
 load_dotenv()
 
 #postgres url connection string
-DATABASE_URL = "postgresql://umhwxbhi:4XLoDGoOktCfamnIZ4KrR_oC4fhjnWSa@floppy.db.elephantsql.com/umhwxbhi"
+DATABASE_URL =  "postgresql://umhwxbhi:4XLoDGoOktCfamnIZ4KrR_oC4fhjnWSa@floppy.db.elephantsql.com/umhwxbhi"
 #create a postgres engine instance
 engine = create_engine(DATABASE_URL)
  #create declarative base meta instance
