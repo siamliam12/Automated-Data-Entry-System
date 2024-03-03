@@ -29,6 +29,8 @@ class TokenCreate(BaseModel):
 
 class TokenData(BaseModel):
     username: str | None = None
+    email: str | None = None
+    download_dir: str | None = None
 
 class UserInDB(UserCreationModel):
     hashed_password: str

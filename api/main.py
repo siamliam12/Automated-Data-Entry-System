@@ -1,5 +1,5 @@
 from fastapi import FastAPI,Depends,HTTPException,status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer,OAuth2PasswordRequestForm
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from auth_bearer import JWTBearer
 from functools import wraps
@@ -13,7 +13,7 @@ from models import User,TokenTable
 from database import Base,engine,sessionlocal
 from sqlalchemy.orm import Session
 import jwt
-from datetime import datetime
+from datetime import datetime,timedelta
 import os
 from jose import jwt,JWTError
 from typing import Optional,Annotated
@@ -119,14 +119,20 @@ def change_password(request: schemas.ChangePassword, db: Session = Depends(get_s
 
     return {"message": "Password changed successfully"}
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 def get_user(db, username: str):
     if username in db:
         user_dict = db[username]
         return schemas.UserInDB(**user_dict)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
+def authenticate_user(db, username, password):
+    user = get_user(db, username)
+    if not user:
+        return False
+    if not verify_password(password,user.hashed_password):
+        return False
+    return user 
 # Verify token function
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)],db: Session = Depends(get_session)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -140,7 +146,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         token_data = schemas.TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    user = get_user(models.User, username=token_data.username)
+    user = get_user(db, username=token_data.username)
     if user is None:
         raise credentials_exception
     return user
@@ -152,16 +158,30 @@ async def get_current_active_user(
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
+@app.post('/token',response_model=schemas.TokenSchema,)
+async def login_for_acess_token(form_data: OAuth2PasswordRequestForm = Depends(),db: Session = Depends(get_session)):
+    user = authenticate_user(db,form_data.usermane,form_data.password)
+    if not user:
+        raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Incorrect username or password",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(data={"sub":user.username},expires_delta=access_token_expires)
+    return {"access_token":access_token,"token_type":"bearer"}
+
 @app.get('/get-data')
 async def get_data():
     pass
 # current_user: Annotated[User, Depends(get_current_active_user)], token: str = Depends(oauth2_scheme)
 @app.get('/attachment-search-by-sender')
-async def attachment(sender,dependencies=Depends(JWTBearer()),current_user:User=Depends(get_current_user)):
-    download_dir = current_user.download_dir
-    search_criteria = email_extractor.search_by_sender(sender)
-    attachments = email_extractor.attachment_download(search_criteria,download_dir)
-    return {"Message":"Attachments has been downloaded successfully"}
+async def attachment(sender,dependencies=Depends(JWTBearer()),current_user:User=Depends(get_current_active_user)):
+    download_dir = current_user
+    # search_criteria = email_extractor.search_by_sender(sender)
+    # attachments = email_extractor.attachment_download(search_criteria,download_dir)
+    # return {"Message":"Attachments has been downloaded successfully"}
+    return {"Message":download_dir}
     
 @app.get('/attachment-search-by-date')
 async def attachment(subject,start_date,end_date,download_dir):
