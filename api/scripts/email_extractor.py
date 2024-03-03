@@ -9,11 +9,6 @@ from bs4 import BeautifulSoup as bs
 load_dotenv('./.env')
 class EmailExtractor():    
     cwd = os.getcwd()
-
-    # def details(self,subject_header,date=(datetime.datetime.now()-datetime.timedelta(1)).strftime("%d-%b-%Y")):
-    #     #email search criteria
-    #     search_criteria = "(ON "+date+" Subject '"+subject_header+"')"
-    #     return search_criteria
     def set_search_rules(self,subject_header,start_date=None,end_date=None):
         search_criteria = "Subject '{}'".format(subject_header)
         if start_date and end_date:
@@ -24,11 +19,11 @@ class EmailExtractor():
         search_criteria = "From '{}'".format(sender)
         return search_criteria
     
-    def attachment_download(self,search_criteria):
+    def attachment_download(self,search_criteria,download_dir):
         username = os.environ.get('email')
         password = os.environ.get('password')
         url = 'imap.gmail.com'
-        detach_dir = './downloads'#where to save attachments (default:current directory)
+        detach_dir = download_dir#where to save attachments (default:current directory)
         #connecting to server
         mail = imaplib.IMAP4_SSL(url,993,timeout=60)
         mail.login(username,password)
@@ -93,14 +88,4 @@ class EmailExtractor():
                     Email Body: {body}
                     ''', )  
         
-emailExtractor = EmailExtractor()
-
-subject ='prescription'
-start_date = "01-Feb-2024"
-end_date = "28-Mar-2024"
-sender = ""
-search_criteria = emailExtractor.set_search_rules(subject,start_date,end_date)
-# search_criteria = emailExtractor.search_by_sender(sender)
-print(search_criteria)
-emailExtractor.attachment_download(search_criteria)
-
+email_extractor = EmailExtractor()

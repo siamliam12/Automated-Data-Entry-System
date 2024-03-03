@@ -37,6 +37,6 @@ class ImageConverter():
                 img.save(jpgpath,quality=95,optimize=True)
 
 converter = ImageConverter()
-converter.convert_from_png(png,jpg)
-converter.convert_from_jfif(jfif,jpg)
-converter.convert_from_jfif(webp,jpg)
+# converter.convert_from_png(png,jpg)
+# converter.convert_from_jfif(jfif,jpg)
+# converter.convert_from_jfif(webp,jpg)
