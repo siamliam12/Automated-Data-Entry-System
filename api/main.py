@@ -1,38 +1,25 @@
-from fastapi import FastAPI,Depends,HTTPException,status
-from fastapi.security import OAuth2PasswordBearer,OAuth2PasswordRequestForm
-from fastapi.security import HTTPBasicCredentials, HTTPBasic
-from auth_bearer import JWTBearer
-from functools import wraps
-from utils import create_access_token,create_refresh_token,verify_password,get_hashed_password,verify_token
+from fastapi import FastAPI,Depends,HTTPException,status,File,UploadFile
 from scripts.email_extractor import email_extractor
-from scripts.image_manipulator import converter
+from scripts.image_manipulator import ImageConverter
 from scripts.text_extractor import text
 import schemas
 import models
-from models import User,TokenTable
-from database import Base,engine,sessionlocal
+from models import User
+import crud
+from database import engine,sessionlocal
 from sqlalchemy.orm import Session
-import jwt
-from datetime import datetime,timedelta
 import os
-from jose import jwt,JWTError
-from typing import Optional,Annotated
-
-Base.metadata.create_all(engine)
-def get_session():
-    session = sessionlocal()
-    try:
-        yield session
-    finally:
-        session.close()
+from typing import Optional,List
 
 app = FastAPI()
+models.Base.metadata.create_all(engine)
+def get_session():
+    db = sessionlocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 30  # 30 minutes
-REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 7 days
-ALGORITHM = "HS256"
-JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')  # should be kept secret
-JWT_REFRESH_SECRET_KEY = os.environ.get('JWT_REFRESH_SECRET_KEY')
 
 @app.get('/')
 async def index():
@@ -48,154 +35,98 @@ async def index():
     return {"message":routes}
 
 
-@app.post('/register')
-def register_user(user:schemas.UserCreationModel,session:Session=Depends(get_session)):
-    existing_user = session.query(models.User).filter_by(email=user.email).first()
-    if existing_user:
-        raise HTTPException(status_code=400,detail="Email already registered")
-    encrypted_password = get_hashed_password(user.password)
-    new_user = models.User(Username=user.Username,email=user.email,download_dir=user.download_dir,password=encrypted_password)
-    session.add(new_user)
-    session.commit()
-    session.refresh(new_user)
-    return {"message":f"New user {user.Username} added successfully"}
-
-@app.post('/login')
-def login(request:schemas.requestdetails,db:Session=Depends(get_session)):
-    user = db.query(User).filter(User.email == request.email).first()
+def get_user_data(username:Optional[str]=None,db:Session=Depends(get_session))->schemas.UserSchema:
+    user = crud.get_user_by_username(db,username)
     if user is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Invalid Credentials")
-    hashed_pass = user.password
-    if not verify_password(request.password,hashed_pass):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Invalid Credentials")
-    access = create_access_token(user.id)
-    refresh = create_refresh_token(user.id)
-    token_db = models.TokenTable(user_id=user.id,email=user.email,download_dir=user.download_dir,access_token=access,refresh_token=refresh, status=True)
-    db.add(token_db)
-    db.commit()
-    db.refresh(token_db)
-    return {
-        "access_token":access,
-        "refresh_token":refresh
-    }
-@app.post('/logout')
-def logout(dependencies=Depends(JWTBearer()), db: Session = Depends(get_session)):
-    token=dependencies
-    payload = jwt.decode(token, JWT_SECRET_KEY, ALGORITHM)
-    user_id = payload['sub']
-    token_record = db.query(models.TokenTable).all()
-    info=[]
-    for record in token_record :
-        print("record",record)
-        if (datetime.utcnow() - record.created_date).days >1:
-            info.append(record.user_id)
-    if info:
-        existing_token = db.query(models.TokenTable).where(TokenTable.user_id.in_(info)).delete()
-        db.commit()
-        
-    existing_token = db.query(models.TokenTable).filter(models.TokenTable.user_id == user_id, models.TokenTable.access_toke==token).first()
-    if existing_token:
-        existing_token.status=False
-        db.add(existing_token)
-        db.commit()
-        db.refresh(existing_token)
-    return {"message":"Logout Successfully"} 
-
-# @app.get('/getusers')
-# def getusers( dependencies=Depends(JWTBearer()),session: Session = Depends(get_session)):
-#     user = session.query(models.User).all()
-#     return user
-
-@app.post('/change-password')
-def change_password(request: schemas.ChangePassword, db: Session = Depends(get_session)):
-    user = db.query(models.User).filter(models.User.email==request.email).first()
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Invalid Credentials")
-    if not verify_password(request.old_password,user.password):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Invalid old Password")
-    cencrypted_password = get_hashed_password(request.new_password)
-    user.password = cencrypted_password
-    db.commit()
-
-    return {"message": "Password changed successfully"}
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-def get_user(db, username: str):
-    if username in db:
-        user_dict = db[username]
-        return schemas.UserInDB(**user_dict)
-def authenticate_user(db, username, password):
-    user = get_user(db, username)
-    if not user:
-        return False
-    if not verify_password(password,user.hashed_password):
-        return False
-    return user 
-# Verify token function
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)],db: Session = Depends(get_session)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
-        Username: str = payload.get("sub")
-        email: str = payload.get("email","")
-        download_dir: str = payload.get("download_dir","")
-        if Username is None:
-            raise credentials_exception
-        token_data = schemas.TokenData(Username=Username,email=email, download_dir=download_dir)
-    except JWTError:
-        raise credentials_exception
-    user = get_user(db, username=token_data.Username)
-    if user is None:
-        raise credentials_exception
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
 
-async def get_current_active_user(
-    current_user: User=Depends(get_current_user)
-)->User:
-    if current_user.disabled:
-        raise HTTPException(status_code=400, detail="Inactive user")
-    return current_user
-
-# @app.post('/token',response_model=schemas.TokenSchema,)
-# async def login_for_acess_token(form_data: OAuth2PasswordRequestForm = Depends(),db: Session = Depends(get_session)):
-#     user = authenticate_user(db,form_data.usermane,form_data.password)
-#     if not user:
-#         raise HTTPException(
-#         status_code=status.HTTP_401_UNAUTHORIZED,
-#         detail="Incorrect username or password",
-#         headers={"WWW-Authenticate": "Bearer"},
-#     )
-#     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-#     access_token = create_access_token(data={"sub":user.username},expires_delta=access_token_expires)
-#     return {"access_token":access_token,"token_type":"bearer"}
+@app.post('/users',response_model=schemas.UserSchema)
+def create_user(user:schemas.UserSchema,db:Session=Depends(get_session)):
+    existing_user =  db.query(models.User).filter(models.User.username==user.username).first()
+    if existing_user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists")
+    db = sessionlocal()
+    db_user = models.User(**user.dict())
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
 
 @app.get('/get-data')
-async def get_data():
-    pass
-# current_user: Annotated[User, Depends(get_current_active_user)], token: str = Depends(oauth2_scheme)
+async def get_data(db:Session=Depends(get_session)):
+    data = db.query(models.Data).all()
+    return {"data": data}
+@app.get('/get-data/{id}')
+async def get_data(id:int,db:Session=Depends(get_session)):
+    data = db.query(models.Data).filter(models.Data.id == id).first()
+    if data is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return {"data": data}
+@app.put('/update-data/{id}')
+async def update_data(id:int,data:schemas.DataSchema,db:Session=Depends(get_session)):
+    db_data = db.query(models.Data).filter(models.Data.id == id).first()
+    if data is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    db_data.name = data.name
+    db_data.age = data.age
+    db_data.date = data.date
+    db_data.complaint = data.complaint
+    db_data.diagnosis = data.diagnosis
+    db_data.prescription_info = data.prescription_info
+    db.commit()
+    return {"data": "Data has been updated successfully"}
+@app.delete('/delete-data/{id}')
+async def delete_data(id:int,db:Session=Depends(get_session)):
+    data = db.query(models.Data).filter(models.Data.id == id).first()
+    if data is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    db.delete(data)
+    db.commit()
+    return {"message": "Data has been deleted successfully"}
+
 @app.get('/attachment-search-by-sender')
-async def attachment(sender,dependencies=Depends(JWTBearer()),current_user:User=Depends(get_current_active_user)):
-    download_dir = current_user
-    # search_criteria = email_extractor.search_by_sender(sender)
-    # attachments = email_extractor.attachment_download(search_criteria,download_dir)
-    # return {"Message":"Attachments has been downloaded successfully"}
-    return {"Message":download_dir}
-    
-@app.get('/attachment-search-by-date')
-async def attachment(subject,start_date,end_date,download_dir):
-    search_criteria = email_extractor.set_search_rules(subject,start_date,end_date)
+async def attachment(sender,user:schemas.UserSchema = Depends(get_user_data)):
+    download_dir = user.download_dir
+    search_criteria = email_extractor.search_by_sender(sender)
     attachments = email_extractor.attachment_download(search_criteria,download_dir)
     return {"Message":"Attachments has been downloaded successfully"}
+    
+@app.get('/attachment-search-by-date')
+async def attachment(subject,start_date,end_date,user:schemas.UserSchema = Depends(get_user_data)):
+    download_dir =user.download_dir 
+    search_criteria = email_extractor.set_search_rules(subject,start_date,end_date)
+    attachments = email_extractor.attachment_download(search_criteria,download_dir)
+    return {"Message":f"Attachments has been downloaded successfully {search_criteria}"}
 
 
 @app.get('/converter')
-async def converter():
-   pass
-
-@app.get('/text-extractor')
-async def text_extractor():
-    pass
+async def converter(image_type,user:schemas.UserSchema = Depends(get_user_data)):
+    converter = ImageConverter()
+    download_dir =user.download_dir 
+    jpg = os.path.join(download_dir,"jpg")
+    png = os.path.join(download_dir,"png")
+    if image_type == "png":
+       converter.convert_from_png(png,jpg)
+    if image_type == "webp":
+        webp = os.path.join(download_dir,"webp")
+        converter.convert_from_webp(webp,jpg)
+    if image_type == "jfif":
+        jfif = os.path.join(download_dir,"jfif")
+        converter.convert_from_webp(jfif,jpg)
+    return {"Message":f"Image Successfully Converted from {image_type} to jpg={png}"}
+# files:List[UploadFile]=File(...)
+@app.post('/text-extractor')
+async def text_extractor(user:schemas.UserSchema = Depends(get_user_data),db:Session=Depends(get_session)):
+    download_dir = user.download_dir
+    path = os.path.join(download_dir,'jpg')
+    data = text.extractor(path)
+    print(data)
+    try:
+        new_data = models.Data(name=data['name'],age=data['age'],date=data['date'],complaint=data['complaint'],diagnosis=data['diagnosis'],prescription_info=data['prescription_info'])
+        db.add(new_data)
+        db.commit()
+        db.refresh(new_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save data: {str(e)}")
+    return {"message":f"Data has been saved successfully"}

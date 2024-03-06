@@ -3,10 +3,10 @@ import cv2 as cv
 import os
 from PIL import Image
 
-png = './downloads/png'
-jpg = './downloads/jpg'
-jfif = './downloads/jfif'
-webp = './downloads/webp'
+# png = './downloads/png'
+# jpg = './downloads/jpg'
+# jfif = './downloads/jfif'
+# webp = './downloads/webp'
 
 class ImageConverter():
     def convert_from_png(self,png,jpg):

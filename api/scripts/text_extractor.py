@@ -5,7 +5,7 @@ import os
 pytesseract.pytesseract.tesseract_cmd = r'C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe'
 
 class Text():
-    def extractor(self,path,files):
+    def extractor(self,path):
         files = os.listdir(path)
         for file in files:
             workfile = os.path.join(path, file)
@@ -33,14 +33,13 @@ class Text():
             complaint = complaint_match.group(1) if complaint_match else None
             diagnosis = diagnosis_match.group(1) if diagnosis_match else None
             prescription_info = prescription_match.group(1).strip() if prescription_match else None
-
-            # Print extracted information
-            print("Name:", name)
-            print("Age:", age)
-            print("Date:", date)
-            print("Complaint:", complaint)
-            print("Diagnosis:", diagnosis)
-            print("Prescription info: ",prescription_info)
-            print("================================================")
-
+            extracted_data={
+                "name": name,
+                "age": age,
+                "date": date,
+                "complaint":complaint,
+                "diagnosis":diagnosis,
+                "prescription_info":prescription_info,
+             }
+        return extracted_data
 text = Text()
