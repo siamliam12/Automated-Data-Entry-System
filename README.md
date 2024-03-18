@@ -5,7 +5,7 @@ The Automated Data Entry System is designed to streamline the process of enterin
 # Base setup:
    As it works with email it has to store sentisitive data like email's app password which is not safe so we made this as a local system you can use it. All you need to have python installed and other things should work out of the box. everything works with a click of a button. let's walk you through how to set this up locally. 
    # step 1: Getting the codebase
-      clone the repository from this github. The command to do this ```git clone ```
+      clone the repository from this github. The command to do this ```git clone https://github.com/siamliam12/Automated-Data-Entry-System.git```
       if you don't have git installed you can download the zip
    # step 2: Creating virtual env
       cd into the folder.
